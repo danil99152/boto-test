@@ -1,0 +1,30 @@
+# Базовый Python .gitignore
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# setuptools / packaging
+build/
+dist/
+*.egg-info/
+
+# IDE / редакторы
+.idea/
+.vscode/
+
+# База данных приложения
+shortener.db
+
+# Тестовые БД / временные файлы
+*.sqlite3
+*.db
+*.log
+

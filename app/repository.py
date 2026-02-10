@@ -33,6 +33,56 @@ def create_short_url(original_url: str) -> str:
         raise RuntimeError("Не удалось сгенерировать уникальный код короткой ссылки")
 
 
+def create_short_url_with_code(original_url: str, code: str) -> None:
+    """Создаёт запись с заданным кодом. Бросает ValueError при конфликте."""
+    with get_connection() as conn:
+        try:
+            conn.execute(
+                "INSERT INTO urls (code, original_url) VALUES (?, ?)",
+                (code, original_url),
+            )
+            logger.info(
+                "Создана короткая ссылка с заданным кодом: %s -> %s", code, original_url
+            )
+        except Exception as exc:
+            logger.warning(
+                "Не удалось создать ссылку с кодом %s (возможно, уже существует): %s",
+                code,
+                exc,
+            )
+            raise ValueError("Code already exists") from exc
+
+
+def update_short_url(code: str, new_url: str) -> bool:
+    """Обновляет оригинальный URL для заданного кода. Возвращает True, если запись найдена."""
+    with get_connection() as conn:
+        cur = conn.execute(
+            "UPDATE urls SET original_url = ? WHERE code = ?",
+            (new_url, code),
+        )
+        updated = cur.rowcount > 0
+    if updated:
+        logger.info("Обновлён URL для кода %s -> %s", code, new_url)
+    else:
+        logger.info("Не удалось обновить URL: код %s не найден", code)
+    return updated
+
+
+def delete_short_url(code: str) -> bool:
+    """Удаляет ссылку по коду. Возвращает True, если запись была удалена."""
+    with get_connection() as conn:
+        cur = conn.execute(
+            "DELETE FROM urls WHERE code = ?",
+            (code,),
+        )
+        deleted = cur.rowcount > 0
+    if deleted:
+        logger.info("Удалена ссылка с кодом %s", code)
+    else:
+        logger.info("Не удалось удалить ссылку: код %s не найден", code)
+    return deleted
+
+
 def get_original_url(code: str) -> Optional[str]:
     """Возвращает оригинальный URL по коду или None."""
     with get_connection() as conn:

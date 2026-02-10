@@ -8,8 +8,14 @@ from fastapi.responses import RedirectResponse
 import uvicorn
 
 from .db import init_db
-from .repository import create_short_url, get_original_url
-from .schemas import ShortenRequest, ShortenResponse
+from .repository import (
+    create_short_url,
+    create_short_url_with_code,
+    delete_short_url,
+    get_original_url,
+    update_short_url,
+)
+from .schemas import ShortenRequest, ShortenResponse, UpdateUrlRequest
 
 
 logging.basicConfig(
@@ -32,7 +38,17 @@ app = FastAPI(title="Boto URL Shortener", lifespan=lifespan)
 
 @app.post("/shorten", response_model=ShortenResponse)
 async def shorten_url(payload: ShortenRequest) -> ShortenResponse:
-    code = create_short_url(str(payload.url))
+    # Если пользователь передал кастомный код, пытаемся использовать его.
+    if payload.code:
+        try:
+            create_short_url_with_code(str(payload.url), payload.code)
+            code = payload.code
+        except ValueError:
+            raise HTTPException(
+                status_code=409, detail="Code already exists"
+            ) from None
+    else:
+        code = create_short_url(str(payload.url))
     base_url = os.getenv("BASE_URL")
     if base_url:
         short_url = f"{base_url.rstrip('/')}/{code}"
@@ -51,6 +67,30 @@ async def redirect(code: str):
         raise HTTPException(status_code=404, detail="Short URL not found")
     logger.info("Редирект с %s на %s", code, original_url)
     return RedirectResponse(url=original_url, status_code=307)
+
+
+@app.patch("/{code}", response_model=ShortenResponse)
+async def update(code: str, payload: UpdateUrlRequest) -> ShortenResponse:
+    """Обновление оригинального URL для заданного кода."""
+    updated = update_short_url(code, str(payload.url))
+    if not updated:
+        raise HTTPException(status_code=404, detail="Short URL not found")
+
+    base_url = os.getenv("BASE_URL")
+    if base_url:
+        short_url = f"{base_url.rstrip('/')}/{code}"
+    else:
+        short_url = f"/{code}"
+    logger.info("Обновлён короткий URL %s для кода %s", short_url, code)
+    return ShortenResponse(short_url=short_url)
+
+
+@app.delete("/{code}", status_code=204)
+async def delete(code: str) -> None:
+    """Удаление короткой ссылки."""
+    deleted = delete_short_url(code)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Short URL not found")
 
 
 def run() -> None:
